@@ -3,6 +3,7 @@ import path from "path";
 import dotenv from "dotenv";
 import { GoogleGenAI, Type } from "@google/genai";
 import { createServer as createViteServer } from "vite";
+import OpenAI from "openai";
 
 dotenv.config();
 
@@ -12,14 +13,14 @@ const PORT = 3000;
 app.use(express.json({ limit: "15mb" }));
 
 // Lazy-initialized Gemini Client
-let aiClient: GoogleGenAI | null = null;
+let geminiClient: GoogleGenAI | null = null;
 function getGeminiClient(): GoogleGenAI {
-  if (!aiClient) {
+  if (!geminiClient) {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      throw new Error("GEMINI_API_KEY is not defined in the environment. Please configure it in your Secrets/Settings.");
+      throw new Error("GEMINI_API_KEY is not defined in the environment.");
     }
-    aiClient = new GoogleGenAI({
+    geminiClient = new GoogleGenAI({
       apiKey,
       httpOptions: {
         headers: {
@@ -28,30 +29,30 @@ function getGeminiClient(): GoogleGenAI {
       },
     });
   }
-  return aiClient;
+  return geminiClient;
 }
 
-// REST route for sentiment analysis
-app.post("/api/analyze-sentiment", async (req, res) => {
-  try {
-    const { reviewsText } = req.body;
-    if (!reviewsText || typeof reviewsText !== "string" || reviewsText.trim().length === 0) {
-      res.status(400).json({ error: "No reviews text content found to analyze." });
-      return;
+// Lazy-initialized OpenRouter Client
+let openRouterClient: OpenAI | null = null;
+function getOpenRouterClient(): OpenAI {
+  if (!openRouterClient) {
+    const apiKey = process.env.OPENROUTER_API_KEY;
+    if (!apiKey) {
+      throw new Error("OPENROUTER_API_KEY is not defined in the environment.");
     }
+    openRouterClient = new OpenAI({
+      baseURL: "https://openrouter.ai/api/v1",
+      apiKey: apiKey,
+      defaultHeaders: {
+        "HTTP-Referer": process.env.APP_URL || "http://localhost:3000",
+        "X-Title": "Sentiment Pulse",
+      }
+    });
+  }
+  return openRouterClient;
+}
 
-    let ai;
-    try {
-      ai = getGeminiClient();
-    } catch (keyErr: any) {
-      res.status(500).json({
-        error: "Google Gemini API Key is missing. Please define your GEMINI_API_KEY in the Secrets panel in AI Studio Settings.",
-        details: keyErr.message,
-      });
-      return;
-    }
-
-    const systemPrompt = `You are a professional customer experience analytics engine. 
+const systemPrompt = `You are a professional customer experience analytics engine.
 Analyze the provided customer reviews and extract structural insights.
 
 1. Overall Stats: Calculate average sentiment (0 to 100), total reviews, and breakdown percentages (positive, negative, neutral).
@@ -59,7 +60,41 @@ Analyze the provided customer reviews and extract structural insights.
 3. Executive Summary: Write a clear narrative analytical summary with 1-2 powerful short paragraphs of feedback trends.
 4. Actionable Improvements: Focus on exactly 3 areas. For each, write a concise title, describe the concrete complaints, assign a severity ('high', 'medium', or 'low'), and write a specific recommendation.
 5. Word/Tag Cloud: Find 15-25 high-frequency keywords or phrases and classify them as 'praise' or 'complaint', with their frequency count and score (0-100).
-6. Parsed Reviews Listing: Parse up to 40 individual reviews, returning a snippet, date, sentiment label, score, and a brief one-sentence summary.`;
+6. Parsed Reviews Listing: Parse up to 40 individual reviews, returning a snippet, date, sentiment label, score, and a brief one-sentence summary.
+
+IMPORTANT: You MUST respond ONLY with a valid JSON object matching this structure:
+{
+  "overallStats": {
+    "averageSentiment": number,
+    "totalReviewsParsed": number,
+    "positivePercent": number,
+    "negativePercent": number,
+    "neutralPercent": number
+  },
+  "executiveSummary": "string (markdown)",
+  "topActionableAreas": [
+    { "title": "string", "description": "string", "severity": "high" | "medium" | "low", "recommendation": "string" }
+  ],
+  "sentimentTrend": [
+    { "date": "string", "sentimentScore": number, "volume": number }
+  ],
+  "wordCloud": [
+    { "text": "string", "type": "praise" | "complaint", "count": number, "sentimentScore": number }
+  ],
+  "parsedReviews": [
+    { "text": "string", "date": "string", "sentiment": "positive" | "neutral" | "negative", "score": number, "summary": "string" }
+  ]
+}`;
+
+// REST route for sentiment analysis
+app.post("/api/analyze-sentiment", async (req, res) => {
+  try {
+    const { reviewsText, provider = "gemini", model } = req.body;
+
+    if (!reviewsText || typeof reviewsText !== "string" || reviewsText.trim().length === 0) {
+      res.status(400).json({ error: "No reviews text content found to analyze." });
+      return;
+    }
 
     const userPrompt = `Here is the batch of raw customer reviews:
 ---
@@ -68,97 +103,118 @@ ${reviewsText}
 
 Perform the complete sentiment analysis and output the result in the requested JSON structure. Ensure all percentages and sentiment values represent realistic, detailed customer experience data.`;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
-      contents: userPrompt,
-      config: {
-        systemInstruction: systemPrompt,
-        temperature: 0.1,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            overallStats: {
-              type: Type.OBJECT,
-              properties: {
-                averageSentiment: { type: Type.NUMBER, description: "Average sentiment score from 0 (very negative) to 100 (very positive)" },
-                totalReviewsParsed: { type: Type.INTEGER },
-                positivePercent: { type: Type.NUMBER, description: "Percentage of positive reviews (0-100)" },
-                negativePercent: { type: Type.NUMBER, description: "Percentage of negative reviews (0-100)" },
-                neutralPercent: { type: Type.NUMBER, description: "Percentage of neutral reviews (0-100)" },
-              },
-              required: ["averageSentiment", "totalReviewsParsed", "positivePercent", "negativePercent", "neutralPercent"]
-            },
-            executiveSummary: { type: Type.STRING, description: "A detailed markdown analysis describing the general customer feeling, major bottlenecks, and top takeaways." },
-            topActionableAreas: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  title: { type: Type.STRING, description: "The name of the action point" },
-                  description: { type: Type.STRING, description: "Details of what customers complained about" },
-                  severity: { type: Type.STRING, description: "Must be 'high', 'medium', or 'low'" },
-                  recommendation: { type: Type.STRING, description: "Exact proposed business solution" },
-                },
-                required: ["title", "description", "severity", "recommendation"]
-              },
-              description: "Must contain exactly 3 critical areas."
-            },
-            sentimentTrend: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  date: { type: Type.STRING, description: "YYYY-MM-DD or readable interval like 'Week 1', ordered chronologically" },
-                  sentimentScore: { type: Type.NUMBER, description: "0-100 average sentiment score for this interval" },
-                  volume: { type: Type.INTEGER, description: "Number of reviews in this interval" },
-                },
-                required: ["date", "sentimentScore", "volume"]
-              },
-              description: "Chronological points for the trend line chart (ideally 5 to 10 intervals)."
-            },
-            wordCloud: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  text: { type: Type.STRING, description: "The keyword or short phrase (1-3 words)" },
-                  type: { type: Type.STRING, description: "Must be 'praise' or 'complaint'" },
-                  count: { type: Type.INTEGER, description: "How frequently the theme occurs (relative scale, e.g. 2 to 50)" },
-                  sentimentScore: { type: Type.NUMBER, description: "0-100 average sentiment score specifically for this word context" }
-                },
-                required: ["text", "type", "count", "sentimentScore"]
-              },
-              description: "Top 15-25 keywords/themes for praise and complaints to plot in the word cloud."
-            },
-            parsedReviews: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  text: { type: Type.STRING, description: "The original review snippet or text" },
-                  date: { type: Type.STRING, description: "Extracted or assigned date/time for this review" },
-                  sentiment: { type: Type.STRING, description: "Must be 'positive', 'neutral', or 'negative'" },
-                  score: { type: Type.NUMBER, description: "0-100 individual confidence/sentiment score" },
-                  summary: { type: Type.STRING, description: "A one-sentence summary of the user's feedback" }
-                },
-                required: ["text", "date", "sentiment", "score", "summary"]
-              },
-              description: "List of processed individual reviews (up to 40 items)."
-            }
-          },
-          required: ["overallStats", "executiveSummary", "topActionableAreas", "sentimentTrend", "wordCloud", "parsedReviews"]
-        }
-      }
-    });
+    let outputText = "";
 
-    const outputText = response.text;
+    if (provider === "gemini") {
+      const ai = getGeminiClient();
+      const geminiModel = model || "gemini-3.5-flash";
+
+      const response = await ai.models.generateContent({
+        model: geminiModel,
+        contents: userPrompt,
+        config: {
+          systemInstruction: systemPrompt,
+          temperature: 0.1,
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              overallStats: {
+                type: Type.OBJECT,
+                properties: {
+                  averageSentiment: { type: Type.NUMBER },
+                  totalReviewsParsed: { type: Type.INTEGER },
+                  positivePercent: { type: Type.NUMBER },
+                  negativePercent: { type: Type.NUMBER },
+                  neutralPercent: { type: Type.NUMBER },
+                },
+                required: ["averageSentiment", "totalReviewsParsed", "positivePercent", "negativePercent", "neutralPercent"]
+              },
+              executiveSummary: { type: Type.STRING },
+              topActionableAreas: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    title: { type: Type.STRING },
+                    description: { type: Type.STRING },
+                    severity: { type: Type.STRING },
+                    recommendation: { type: Type.STRING },
+                  },
+                  required: ["title", "description", "severity", "recommendation"]
+                }
+              },
+              sentimentTrend: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    date: { type: Type.STRING },
+                    sentimentScore: { type: Type.NUMBER },
+                    volume: { type: Type.INTEGER },
+                  },
+                  required: ["date", "sentimentScore", "volume"]
+                }
+              },
+              wordCloud: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    text: { type: Type.STRING },
+                    type: { type: Type.STRING },
+                    count: { type: Type.INTEGER },
+                    sentimentScore: { type: Type.NUMBER }
+                  },
+                  required: ["text", "type", "count", "sentimentScore"]
+                }
+              },
+              parsedReviews: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    text: { type: Type.STRING },
+                    date: { type: Type.STRING },
+                    sentiment: { type: Type.STRING },
+                    score: { type: Type.NUMBER },
+                    summary: { type: Type.STRING }
+                  },
+                  required: ["text", "date", "sentiment", "score", "summary"]
+                }
+              }
+            },
+            required: ["overallStats", "executiveSummary", "topActionableAreas", "sentimentTrend", "wordCloud", "parsedReviews"]
+          }
+        }
+      });
+      outputText = response.text;
+    } else if (provider === "openrouter") {
+      const ai = getOpenRouterClient();
+      const orModel = model || "google/gemini-2.0-flash-001"; // Default for OpenRouter
+
+      const response = await ai.chat.completions.create({
+        model: orModel,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.1,
+      });
+
+      outputText = response.choices[0].message.content || "";
+    } else {
+      res.status(400).json({ error: `Unsupported provider: ${provider}` });
+      return;
+    }
+
     res.setHeader("Content-Type", "application/json");
     res.send(outputText);
   } catch (error: any) {
     console.error("Analysis Error:", error);
     res.status(500).json({
-      error: "Error processing reviews with Gemini.",
+      error: "Error processing reviews with AI.",
       details: error.message || String(error),
     });
   }
