@@ -1,0 +1,6 @@
+{
+  "name": "Customer Sentiment Dashboard",
+  "description": "Create high-fidelity visual reports from customer feedback, including sentiment trend lines, keyword clouds of praises or complaints, and AI-powered executive summaries with actionable improvements.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
