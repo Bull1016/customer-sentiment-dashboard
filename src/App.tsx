@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { DashboardReport, PresetDataset } from "./types";
 import { PRESET_DATASETS } from "./data";
 import WordCloud from "./components/WordCloud";
@@ -35,10 +35,20 @@ interface AIModel {
 }
 
 const AI_MODELS: AIModel[] = [
-  { id: "gemini-3.5-flash", name: "Gemini 3.5 Flash", provider: "gemini", isFree: true },
-  { id: "google/gemini-2.0-flash-001", name: "Gemini 2.0 Flash (OpenRouter)", provider: "openrouter", isFree: true },
+  // ── Gemini Direct (via GEMINI_API_KEY) ──────────────────────────────────
+  { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash", provider: "gemini", isFree: true },
+  { id: "gemini-2.5-flash-preview-05-20", name: "Gemini 2.5 Flash Preview", provider: "gemini", isFree: true },
+
+  // ── OpenRouter — Truly Free ($0 input / $0 output) ──────────────────────
   { id: "meta-llama/llama-3.3-70b-instruct:free", name: "Llama 3.3 70B (Free)", provider: "openrouter", isFree: true },
-  { id: "mistralai/mistral-7b-instruct:free", name: "Mistral 7B (Free)", provider: "openrouter", isFree: true },
+  { id: "deepseek/deepseek-v4-flash:free", name: "DeepSeek V4 Flash (Free)", provider: "openrouter", isFree: true },
+  { id: "qwen/qwen3-coder:free", name: "Qwen3 Coder 480B (Free)", provider: "openrouter", isFree: true },
+  { id: "nvidia/nemotron-3-super-120b-a12b:free", name: "NVIDIA Nemotron 3 Super 120B (Free)", provider: "openrouter", isFree: true },
+  { id: "google/gemma-4-31b-it:free", name: "Gemma 4 31B (Free)", provider: "openrouter", isFree: true },
+  { id: "nousresearch/hermes-3-llama-3.1-405b:free", name: "Hermes 3 405B (Free)", provider: "openrouter", isFree: true },
+
+  // ── OpenRouter — Paid ───────────────────────────────────────────────────
+  { id: "google/gemini-2.0-flash-001", name: "Gemini 2.0 Flash (Paid)", provider: "openrouter", isFree: false },
   { id: "openai/gpt-4o", name: "GPT-4o (Paid)", provider: "openrouter", isFree: false },
   { id: "anthropic/claude-3.5-sonnet", name: "Claude 3.5 Sonnet (Paid)", provider: "openrouter", isFree: false },
   { id: "deepseek/deepseek-chat", name: "DeepSeek V3 (Paid)", provider: "openrouter", isFree: false },
@@ -49,9 +59,25 @@ export default function App() {
   const [activePreset, setActivePreset] = useState<PresetDataset | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showToast, setShowToast] = useState(false);
   const [report, setReport] = useState<DashboardReport | null>(null);
   const [selectedWord, setSelectedWord] = useState<string | null>(null);
   const [isInputCollapsed, setIsInputCollapsed] = useState(false);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Show toast whenever a new error appears, auto-dismiss after 6 s
+  useEffect(() => {
+    if (error) {
+      setShowToast(true);
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = setTimeout(() => setShowToast(false), 6000);
+    } else {
+      setShowToast(false);
+    }
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, [error]);
 
   // AI Selection State
   const [isFreeOnly, setIsFreeOnly] = useState(true);
@@ -164,6 +190,45 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans antialiased pb-12">
+
+      {/* ── Toast Notification ── */}
+      <AnimatePresence>
+        {showToast && error && (
+          <motion.div
+            key="error-toast"
+            initial={{ opacity: 0, x: 80, scale: 0.95 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{ opacity: 0, x: 80, scale: 0.95 }}
+            transition={{ type: "spring", stiffness: 300, damping: 28 }}
+            className="fixed top-5 right-5 z-50 w-80 rounded-2xl border border-rose-200 bg-white shadow-2xl shadow-rose-100/60 overflow-hidden"
+          >
+            {/* Progress bar */}
+            <motion.div
+              className="h-1 bg-rose-500 origin-left"
+              initial={{ scaleX: 1 }}
+              animate={{ scaleX: 0 }}
+              transition={{ duration: 6, ease: "linear" }}
+            />
+            <div className="p-4 flex items-start gap-3">
+              <div className="flex-shrink-0 w-8 h-8 bg-rose-100 rounded-xl flex items-center justify-center">
+                <AlertCircle className="h-4 w-4 text-rose-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold text-rose-900">Analysis Failed</p>
+                <p className="mt-0.5 text-[10px] text-rose-700 leading-relaxed line-clamp-3">{error}</p>
+              </div>
+              <button
+                onClick={() => { setError(null); setShowToast(false); }}
+                className="flex-shrink-0 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer text-lg leading-none"
+                aria-label="Dismiss"
+              >
+                ×
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Top Professional Bento Header */}
       <header className="mx-auto max-w-7xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 px-4 pt-8 pb-4 sm:px-6">
         <div>
@@ -173,6 +238,30 @@ export default function App() {
           <p className="text-slate-500 font-medium text-sm mt-1">
             Multi-Model Customer Review Analysis (Hybrid AI Engine)
           </p>
+          {/* ── Inline error banner directly under the subtitle ── */}
+          <AnimatePresence>
+            {error && (
+              <motion.div
+                key="header-error"
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.2 }}
+                className="mt-2 flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 max-w-lg"
+              >
+                <AlertCircle className="h-3.5 w-3.5 text-rose-500 shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <span className="text-[10px] font-bold text-rose-800">Analysis Failed — </span>
+                  <span className="text-[10px] text-rose-700 leading-relaxed">{error}</span>
+                </div>
+                <button
+                  onClick={() => setError(null)}
+                  className="text-rose-400 hover:text-rose-600 transition-colors cursor-pointer text-sm leading-none flex-shrink-0"
+                  aria-label="Dismiss"
+                >×</button>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         <div className="flex items-center gap-3 flex-wrap">
@@ -393,32 +482,7 @@ export default function App() {
           )}
         </AnimatePresence>
 
-        {/* Diagnostic Key Error Banner */}
-        {error && (
-          <div className="rounded-2xl border border-rose-100 bg-rose-50 p-5 text-rose-800 shadow-xs">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
-              <div>
-                <h4 className="text-sm font-bold text-rose-900">Analysis Request Failed</h4>
-                <p className="mt-1.5 text-xs text-rose-700 leading-relaxed">
-                  {error}
-                </p>
-                <div className="mt-3.5 flex gap-5 text-xs font-bold text-rose-900">
-                  <button 
-                    onClick={() => {
-                      setError(null);
-                    }}
-                    className="hover:underline cursor-pointer"
-                  >
-                    Dismiss Error
-                  </button>
-                  <span className="text-rose-200">|</span>
-                  <span>Check your <strong>GEMINI_API_KEY</strong> or <strong>OPENROUTER_API_KEY</strong> in the environment.</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Error banner removed — now shown in header + toast */}
 
         {/* Core Loading splash screen */}
         {isLoading && (

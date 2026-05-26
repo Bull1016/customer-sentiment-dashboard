@@ -5,7 +5,8 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { createServer as createViteServer } from "vite";
 import OpenAI from "openai";
 
-dotenv.config();
+dotenv.config(); // loads .env
+dotenv.config({ path: ".env.local", override: true }); // loads .env.local (overrides if same key exists)
 
 const app = express();
 const PORT = 3000;
@@ -107,7 +108,7 @@ Perform the complete sentiment analysis and output the result in the requested J
 
     if (provider === "gemini") {
       const ai = getGeminiClient();
-      const geminiModel = model || "gemini-3.5-flash";
+      const geminiModel = model || "gemini-2.0-flash";
 
       const response = await ai.models.generateContent({
         model: geminiModel,
