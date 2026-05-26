@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { DashboardReport, PresetDataset } from "./types";
 import { PRESET_DATASETS } from "./data";
 import WordCloud from "./components/WordCloud";
@@ -19,9 +19,30 @@ import {
   RefreshCcw,
   Smile,
   Frown,
-  Meh
+  Meh,
+  Cpu,
+  Coins
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+
+type AIProvider = "gemini" | "openrouter";
+
+interface AIModel {
+  id: string;
+  name: string;
+  provider: AIProvider;
+  isFree: boolean;
+}
+
+const AI_MODELS: AIModel[] = [
+  { id: "gemini-3.5-flash", name: "Gemini 3.5 Flash", provider: "gemini", isFree: true },
+  { id: "google/gemini-2.0-flash-001", name: "Gemini 2.0 Flash (OpenRouter)", provider: "openrouter", isFree: true },
+  { id: "meta-llama/llama-3.3-70b-instruct:free", name: "Llama 3.3 70B (Free)", provider: "openrouter", isFree: true },
+  { id: "mistralai/mistral-7b-instruct:free", name: "Mistral 7B (Free)", provider: "openrouter", isFree: true },
+  { id: "openai/gpt-4o", name: "GPT-4o (Paid)", provider: "openrouter", isFree: false },
+  { id: "anthropic/claude-3.5-sonnet", name: "Claude 3.5 Sonnet (Paid)", provider: "openrouter", isFree: false },
+  { id: "deepseek/deepseek-chat", name: "DeepSeek V3 (Paid)", provider: "openrouter", isFree: false },
+];
 
 export default function App() {
   const [reviewsText, setReviewsText] = useState("");
@@ -32,6 +53,18 @@ export default function App() {
   const [selectedWord, setSelectedWord] = useState<string | null>(null);
   const [isInputCollapsed, setIsInputCollapsed] = useState(false);
 
+  // AI Selection State
+  const [isFreeOnly, setIsFreeOnly] = useState(true);
+  const [selectedModelId, setSelectedModelId] = useState(AI_MODELS[0].id);
+
+  const filteredModels = useMemo(() => {
+    return isFreeOnly ? AI_MODELS.filter(m => m.isFree) : AI_MODELS;
+  }, [isFreeOnly]);
+
+  const selectedModel = useMemo(() => {
+    return AI_MODELS.find(m => m.id === selectedModelId) || AI_MODELS[0];
+  }, [selectedModelId]);
+
   // Load a preset dataset into textarea
   const selectPreset = (preset: PresetDataset) => {
     setActivePreset(preset);
@@ -39,7 +72,7 @@ export default function App() {
     setError(null);
   };
 
-  // Perform Gemini analysis on server-side
+  // Perform AI analysis on server-side
   const handleAnalyze = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!reviewsText.trim()) return;
@@ -48,14 +81,17 @@ export default function App() {
     setError(null);
     setSelectedWord(null);
 
-    // Auto-collapse input on successful analysis to showcase the beautiful outcomes
     try {
       const response = await fetch("/api/analyze-sentiment", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ reviewsText }),
+        body: JSON.stringify({
+          reviewsText,
+          provider: selectedModel.provider,
+          model: selectedModel.id
+        }),
       });
 
       if (!response.ok) {
@@ -132,10 +168,10 @@ export default function App() {
       <header className="mx-auto max-w-7xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 px-4 pt-8 pb-4 sm:px-6">
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 flex items-center gap-2.5 flex-wrap">
-            Sentiment Pulse <span className="text-indigo-600 font-bold bg-indigo-50 border border-indigo-150 px-2 py-0.5 rounded-xl text-xs uppercase tracking-wider">v2.4</span>
+            Sentiment Pulse <span className="text-indigo-600 font-bold bg-indigo-50 border border-indigo-150 px-2 py-0.5 rounded-xl text-xs uppercase tracking-wider">v2.5</span>
           </h1>
           <p className="text-slate-500 font-medium text-sm mt-1">
-            Google Gemini 3.5 Customer Review Analysis (Live Tracker Mode)
+            Multi-Model Customer Review Analysis (Hybrid AI Engine)
           </p>
         </div>
 
@@ -179,7 +215,7 @@ export default function App() {
                       Step 1: Feed Review Texts
                     </h2>
                     <p className="mt-1.5 text-xs leading-relaxed text-slate-500">
-                      Paste a bulk paragraph of raw feedback reviews (e.g., from CSVs, emails, or chat logs), or choose one of our highly detailed pre-configured industry presets to test instantly.
+                      Paste a bulk paragraph of raw feedback reviews or choose one of our highly detailed pre-configured industry presets.
                     </p>
 
                     <div className="mt-5 space-y-3">
@@ -218,45 +254,110 @@ export default function App() {
 
                   <div className="mt-6 pt-4 border-t border-slate-50">
                     <p className="text-[10px] text-slate-400">
-                      *Note: All analyses are run securely using Google AI Studio API Keys and are never logged or stored.
+                      *Note: All analyses are run securely using Google AI Studio or OpenRouter API Keys.
                     </p>
                   </div>
                 </div>
 
-                {/* Right: Text Area input */}
+                {/* Right: Text Area input & AI Config */}
                 <div className="md:col-span-7 flex flex-col justify-between">
                   <form onSubmit={handleAnalyze} className="h-full flex flex-col justify-between space-y-4">
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <label className="text-xs font-bold text-slate-700">
-                          Raw reviews content paste-board:
-                        </label>
-                        {reviewsText.trim() && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setReviewsText("");
-                              setActivePreset(null);
-                            }}
-                            className="text-[10px] font-semibold text-rose-500 hover:underline"
-                          >
-                            Clear Clipboard
-                          </button>
-                        )}
+                    <div className="space-y-4">
+                      {/* AI Model Selection UI */}
+                      <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                          <div>
+                            <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5 mb-2">
+                              <Cpu className="h-3.5 w-3.5 text-indigo-500" />
+                              Step 2: Select AI Intelligence
+                            </label>
+
+                            <div className="flex items-center gap-2">
+                              <select
+                                value={selectedModelId}
+                                onChange={(e) => setSelectedModelId(e.target.value)}
+                                className="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-medium text-slate-700 focus:outline-hidden focus:border-indigo-500 min-w-[200px]"
+                              >
+                                {filteredModels.map(model => (
+                                  <option key={model.id} value={model.id}>
+                                    {model.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col items-end">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                              Model Type
+                            </label>
+                            <div className="flex p-1 bg-slate-200 rounded-xl">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setIsFreeOnly(true);
+                                  if (!AI_MODELS.find(m => m.id === selectedModelId)?.isFree) {
+                                    setSelectedModelId(AI_MODELS[0].id);
+                                  }
+                                }}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${
+                                  isFreeOnly
+                                    ? "bg-white text-indigo-600 shadow-xs"
+                                    : "text-slate-500 hover:text-slate-700"
+                                }`}
+                              >
+                                <Smile className="h-3 w-3" />
+                                Free
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setIsFreeOnly(false)}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${
+                                  !isFreeOnly
+                                    ? "bg-white text-indigo-600 shadow-xs"
+                                    : "text-slate-500 hover:text-slate-700"
+                                }`}
+                              >
+                                <Coins className="h-3 w-3" />
+                                All Models
+                              </button>
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                      <textarea
-                        value={reviewsText}
-                        onChange={(e) => {
-                          setReviewsText(e.target.value);
-                          setActivePreset(null);
-                        }}
-                        placeholder="Paste random, unfiltered customer feedback messages here... (e.g. 'I bought this device last Friday and screen is amazing but battery is dead' each on a new line or block)"
-                        rows={11}
-                        className="w-full rounded-xl border border-slate-200 p-4 text-xs text-slate-800 placeholder-slate-400 shadow-inner focus:border-indigo-500 focus:outline-hidden"
-                      />
+
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="text-xs font-bold text-slate-700">
+                            Raw reviews content:
+                          </label>
+                          {reviewsText.trim() && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setReviewsText("");
+                                setActivePreset(null);
+                              }}
+                              className="text-[10px] font-semibold text-rose-500 hover:underline"
+                            >
+                              Clear Clipboard
+                            </button>
+                          )}
+                        </div>
+                        <textarea
+                          value={reviewsText}
+                          onChange={(e) => {
+                            setReviewsText(e.target.value);
+                            setActivePreset(null);
+                          }}
+                          placeholder="Paste random, unfiltered customer feedback messages here..."
+                          rows={6}
+                          className="w-full rounded-xl border border-slate-200 p-4 text-xs text-slate-800 placeholder-slate-400 shadow-inner focus:border-indigo-500 focus:outline-hidden"
+                        />
+                      </div>
                     </div>
 
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pt-2">
                       <div className="text-[10px] text-slate-400">
                         Word count: <span className="font-semibold text-slate-600">{reviewsText.split(/\s+/).filter(Boolean).length} words</span>
                       </div>
@@ -273,12 +374,12 @@ export default function App() {
                         {isLoading ? (
                           <>
                             <RefreshCcw className="h-4 w-4 animate-spin" />
-                            <span>Gemini Analyzing Dataset...</span>
+                            <span>AI Analyzing Dataset...</span>
                           </>
                         ) : (
                           <>
                             <Sparkles className="h-4 w-4" />
-                            <span>Generate AI Sentiment Report</span>
+                            <span>Generate {selectedModel.name} Report</span>
                             <ArrowRight className="h-3.5 w-3.5" />
                           </>
                         )}
@@ -305,7 +406,6 @@ export default function App() {
                 <div className="mt-3.5 flex gap-5 text-xs font-bold text-rose-900">
                   <button 
                     onClick={() => {
-                      // Attempt a reset to try different presets
                       setError(null);
                     }}
                     className="hover:underline cursor-pointer"
@@ -313,7 +413,7 @@ export default function App() {
                     Dismiss Error
                   </button>
                   <span className="text-rose-200">|</span>
-                  <span>Set <strong>GEMINI_API_KEY</strong> in the left Settings &gt; Secrets menu inside AI Studio UI.</span>
+                  <span>Check your <strong>GEMINI_API_KEY</strong> or <strong>OPENROUTER_API_KEY</strong> in the environment.</span>
                 </div>
               </div>
             </div>
@@ -329,7 +429,7 @@ export default function App() {
             </div>
             <h3 className="font-display text-base font-bold text-slate-900">Extracting Sentiment Vector</h3>
             <p className="mt-1 text-xs text-slate-400 max-w-sm leading-relaxed">
-              Google Gemini is reading, parsing, and classifying dates, clustering praises/complaints thresholds, and formulating your executive report. Hang tight!
+              {selectedModel.name} is reading, parsing, and classifying your data. Hang tight!
             </p>
           </div>
         )}
@@ -346,10 +446,10 @@ export default function App() {
               >
                 <span className="flex items-center gap-1.5">
                   <Sparkles className="h-3.5 w-3.5 text-indigo-400" />
-                  Showing real-time AI report. Click to reopen review pastes panel to test different profiles.
+                  Showing real-time AI report. Click to reopen inputs and switch models.
                 </span>
                 <span className="text-indigo-400 hover:underline hover:text-indigo-300 font-semibold flex items-center gap-1">
-                  Change Input Dataset <ArrowRight className="h-3 w-3" />
+                  Change Input Dataset or Model <ArrowRight className="h-3 w-3" />
                 </span>
               </div>
             )}
@@ -357,7 +457,7 @@ export default function App() {
             {/* Row 1: Bento Grid metrics cards */}
             <div className="grid gap-6 grid-cols-1 md:grid-cols-4">
               
-              {/* Average Sentiment score gauge - Fully custom-styled overall score with solid indigo background */}
+              {/* Average Sentiment score gauge */}
               <div className="relative bg-indigo-600 border-2 border-indigo-700 rounded-3xl p-6 shadow-xl text-white overflow-hidden flex flex-col justify-between min-h-[220px]">
                 <div className="absolute -top-10 -right-10 w-40 h-40 bg-indigo-50 rounded-full opacity-20"></div>
                 
@@ -371,7 +471,7 @@ export default function App() {
 
                 <div className="relative z-10 mt-4">
                   <div className="px-3 py-1 bg-white/20 rounded-full inline-block font-bold text-xs mb-3">
-                    +12% vs last month
+                    Analyzed by {selectedModel.name}
                   </div>
                   <p className="text-xs font-medium opacity-80 leading-relaxed">
                     {report.overallStats.averageSentiment >= 60 ? (
@@ -452,7 +552,7 @@ export default function App() {
             {/* Row 3: Markdown AI written Executive Bullet Summary & Actionable improvement Cards split */}
             <div className="grid gap-6 md:grid-cols-12">
               
-              {/* Executive summary block (Left 5 column) - Styled with thick neon-brutalist bento look */}
+              {/* Executive summary block */}
               <div className="md:col-span-5 rounded-3xl border-2 border-slate-900 bg-white p-8 shadow-[8px_8px_0px_0px_rgba(15,23,42,1)] flex flex-col justify-between">
                 <div>
                   <div className="flex items-center gap-2 mb-6">
@@ -471,11 +571,11 @@ export default function App() {
                 </div>
 
                 <div className="mt-6 pt-4 border-t border-slate-100 flex items-center gap-2 text-[10px] text-slate-400 leading-relaxed font-sans">
-                  <span>Generative report compiled using advanced contextual NLP classification with Gemini-3.5-Flash.</span>
+                  <span>Generative report compiled using {selectedModel.name}.</span>
                 </div>
               </div>
 
-              {/* Action directives listing (Right 7 column) */}
+              {/* Action directives listing */}
               <div className="md:col-span-7">
                 <ActionableCards areas={report.topActionableAreas} />
               </div>
@@ -497,7 +597,7 @@ export default function App() {
 
       <footer className="mt-20 border-t border-slate-200 bg-white py-12 text-center text-xs text-slate-400">
         <div className="mx-auto max-w-7xl px-4 sm:px-6">
-          <p>© 2026 Customer Sentiment Analytics Dashboard. Powered by serverless Gemini LLM engine.</p>
+          <p>© 2026 Customer Sentiment Analytics Dashboard. Powered by Hybrid AI Engine.</p>
           <p className="mt-1.5 text-slate-300">
             Crafted with high contrast modern design guidelines in React and Tailwind CSS.
           </p>
@@ -506,4 +606,3 @@ export default function App() {
     </div>
   );
 }
-
