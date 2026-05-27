@@ -87,6 +87,47 @@ IMPORTANT: You MUST respond ONLY with a valid JSON object matching this structur
   ]
 }`;
 
+// ── Retry helpers ──────────────────────────────────────────────────────────
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Calls `fn` up to `maxAttempts` times, retrying on 429 / rate-limit errors
+ * with exponential backoff (delayMs * 2^attempt).
+ */
+async function callWithRetry<T>(
+  fn: () => Promise<T>,
+  maxAttempts = 3,
+  delayMs = 2000
+): Promise<T> {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      const status: number =
+        err?.status ?? err?.statusCode ?? err?.response?.status ?? 0;
+      const msg: string = (err?.message ?? "").toLowerCase();
+      const isRateLimit =
+        status === 429 ||
+        msg.includes("429") ||
+        msg.includes("rate limit") ||
+        msg.includes("rate_limit") ||
+        msg.includes("too many requests");
+
+      if (isRateLimit && attempt < maxAttempts - 1) {
+        const wait = delayMs * Math.pow(2, attempt);
+        console.warn(
+          `[Retry ${attempt + 1}/${maxAttempts}] Rate-limited (429). Waiting ${wait}ms before retry…`
+        );
+        await sleep(wait);
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error("Max retry attempts reached.");
+}
+// ───────────────────────────────────────────────────────────────────────────
+
 // REST route for sentiment analysis
 app.post("/api/analyze-sentiment", async (req, res) => {
   try {
@@ -192,17 +233,19 @@ Perform the complete sentiment analysis and output the result in the requested J
       outputText = response.text;
     } else if (provider === "openrouter") {
       const ai = getOpenRouterClient();
-      const orModel = model || "google/gemini-2.0-flash-001"; // Default for OpenRouter
+      const orModel = model || "meta-llama/llama-3.3-70b-instruct:free";
 
-      const response = await ai.chat.completions.create({
-        model: orModel,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt }
-        ],
-        response_format: { type: "json_object" },
-        temperature: 0.1,
-      });
+      const response = await callWithRetry(() =>
+        ai.chat.completions.create({
+          model: orModel,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          response_format: { type: "json_object" },
+          temperature: 0.1,
+        })
+      );
 
       outputText = response.choices[0].message.content || "";
     } else {
@@ -214,9 +257,31 @@ Perform the complete sentiment analysis and output the result in the requested J
     res.send(outputText);
   } catch (error: any) {
     console.error("Analysis Error:", error);
+
+    // Detect rate-limit (429) errors and surface a helpful message
+    const status: number =
+      error?.status ?? error?.statusCode ?? error?.response?.status ?? 0;
+    const msg: string = (error?.message ?? "").toLowerCase();
+    const isRateLimit =
+      status === 429 ||
+      msg.includes("429") ||
+      msg.includes("rate limit") ||
+      msg.includes("rate_limit") ||
+      msg.includes("too many requests");
+
+    if (isRateLimit) {
+      res.status(429).json({
+        error:
+          "Rate limit reached for this model (429). Free-tier models have strict quotas. " +
+          "Please wait 30–60 seconds and try again, or switch to a different model.",
+        details: error.message || String(error),
+      });
+      return;
+    }
+
     res.status(500).json({
-      error: "Error processing reviews with AI.",
-      details: error.message || String(error),
+      error: error.message || "An unexpected error occurred while analyzing reviews.",
+      details: String(error),
     });
   }
 });
