@@ -38,7 +38,6 @@ interface AIModel {
 const AI_MODELS: AIModel[] = [
   // ── Gemini Direct (via GEMINI_API_KEY) ──────────────────────────────────
   { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash", provider: "gemini", isFree: true },
-  { id: "gemini-1.5-flash", name: "Gemini 1.5 Flash Preview", provider: "gemini", isFree: true },
 
   // ── OpenRouter — Truly Free ($0 input / $0 output) ──────────────────────
   { id: "meta-llama/llama-3.3-70b-instruct:free", name: "Llama 3.3 70B (Free)", provider: "openrouter", isFree: true },
