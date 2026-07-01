@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
+import { Analytics } from '@vercel/analytics/react';
 import { DashboardReport, PresetDataset } from "./types";
 import { PRESET_DATASETS } from "./data";
 import WordCloud from "./components/WordCloud";
@@ -667,6 +668,7 @@ export default function App() {
           </p>
         </div>
       </footer>
+      <Analytics />
     </div>
   );
 }
