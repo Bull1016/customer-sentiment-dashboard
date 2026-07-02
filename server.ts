@@ -310,20 +310,24 @@ Perform the complete sentiment analysis and output the result in the requested J
       return;
     }
 
-    // Detect network / connection errors (SDK fetch failures toward AI provider)
+    // Detect network / connection or timeout errors (SDK fetch failures or timeout toward AI provider)
     const isConnectionError =
       error?.code === "ECONNREFUSED" ||
       error?.code === "ENOTFOUND" ||
       error?.code === "ETIMEDOUT" ||
+      error?.name === "APITimeoutError" ||
       msg.includes("connection error") ||
       msg.includes("fetch failed") ||
-      msg.includes("network error");
+      msg.includes("network error") ||
+      msg.includes("timeout") ||
+      msg.includes("timed out") ||
+      msg.includes("abort");
 
     if (isConnectionError) {
       res.status(503).json({
         error:
-          "Unable to reach the AI provider (network error). " +
-          "Check your internet connection or try a different model.",
+          "Unable to reach or get response from the AI provider (network error or timeout). " +
+          "Please verify your connection or switch to a different model.",
         details: error.message || String(error),
       });
       return;
