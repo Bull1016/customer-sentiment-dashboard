@@ -11,6 +11,27 @@ dotenv.config({ path: ".env.local", override: true }); // loads .env.local (over
 const app = express();
 const PORT = 3000;
 
+// ── CORS middleware ─────────────────────────────────────────────────────────
+// Ensures every response (including errors) includes the correct CORS headers
+// so the browser can read API error messages instead of surfacing a NetworkError.
+app.use((req, res, next) => {
+  const origin = req.headers.origin as string | undefined;
+  if (origin) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  } else {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+  }
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  if (req.method === "OPTIONS") {
+    res.sendStatus(204);
+    return;
+  }
+  next();
+});
+// ────────────────────────────────────────────────────────────────────────────
+
 app.use(express.json({ limit: "15mb" }));
 
 // Lazy-initialized Gemini Client
@@ -259,22 +280,44 @@ Perform the complete sentiment analysis and output the result in the requested J
   } catch (error: any) {
     console.error("Analysis Error:", error);
 
-    // Detect rate-limit (429) errors and surface a helpful message
     const status: number =
       error?.status ?? error?.statusCode ?? error?.response?.status ?? 0;
     const msg: string = (error?.message ?? "").toLowerCase();
+
+    // Detect rate-limit (429) errors — direct and upstream (OpenRouter free-tier)
     const isRateLimit =
       status === 429 ||
       msg.includes("429") ||
       msg.includes("rate limit") ||
       msg.includes("rate_limit") ||
-      msg.includes("too many requests");
+      msg.includes("too many requests") ||
+      msg.includes("rate-limited upstream") ||
+      msg.includes("temporarily rate-limited");
 
     if (isRateLimit) {
       res.status(429).json({
         error:
-          "Rate limit reached for this model (429). Free-tier models have strict quotas. " +
+          "Rate limit reached for this model (429). Free-tier models have strict upstream quotas. " +
           "Please wait 30–60 seconds and try again, or switch to a different model.",
+        details: error.message || String(error),
+      });
+      return;
+    }
+
+    // Detect network / connection errors (SDK fetch failures toward AI provider)
+    const isConnectionError =
+      error?.code === "ECONNREFUSED" ||
+      error?.code === "ENOTFOUND" ||
+      error?.code === "ETIMEDOUT" ||
+      msg.includes("connection error") ||
+      msg.includes("fetch failed") ||
+      msg.includes("network error");
+
+    if (isConnectionError) {
+      res.status(503).json({
+        error:
+          "Unable to reach the AI provider (network error). " +
+          "Check your internet connection or try a different model.",
         details: error.message || String(error),
       });
       return;

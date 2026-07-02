@@ -38,20 +38,28 @@ interface AIModel {
 const AI_MODELS: AIModel[] = [
   // ── Gemini Direct (via GEMINI_API_KEY) ──────────────────────────────────
   { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash", provider: "gemini", isFree: true },
+  { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", provider: "gemini", isFree: true },
 
-  // ── OpenRouter — Truly Free ($0 input / $0 output) ──────────────────────
+  // ── OpenRouter — Truly Free ($0 / $0) — verified July 2026 ─────────────
   { id: "meta-llama/llama-3.3-70b-instruct:free", name: "Llama 3.3 70B (Free)", provider: "openrouter", isFree: true },
-  { id: "deepseek/deepseek-v4-flash:free", name: "DeepSeek V4 Flash (Free)", provider: "openrouter", isFree: true },
   { id: "qwen/qwen3-coder:free", name: "Qwen3 Coder 480B (Free)", provider: "openrouter", isFree: true },
+  { id: "qwen/qwen3-next-80b-a3b-instruct:free", name: "Qwen3 Next 80B (Free)", provider: "openrouter", isFree: true },
   { id: "nvidia/nemotron-3-super-120b-a12b:free", name: "NVIDIA Nemotron 3 Super 120B (Free)", provider: "openrouter", isFree: true },
+  { id: "nvidia/nemotron-3-ultra-550b-a55b:free", name: "NVIDIA Nemotron 3 Ultra 550B (Free)", provider: "openrouter", isFree: true },
+  { id: "nvidia/nemotron-3-nano-30b-a3b:free", name: "NVIDIA Nemotron 3 Nano 30B (Free)", provider: "openrouter", isFree: true },
   { id: "google/gemma-4-31b-it:free", name: "Gemma 4 31B (Free)", provider: "openrouter", isFree: true },
-  { id: "nousresearch/hermes-3-llama-3.1-405b:free", name: "Hermes 3 405B (Free)", provider: "openrouter", isFree: true },
+  { id: "google/gemma-4-26b-a4b-it:free", name: "Gemma 4 26B A4B (Free)", provider: "openrouter", isFree: true },
+  { id: "openai/gpt-oss-120b:free", name: "OpenAI GPT-OSS 120B (Free)", provider: "openrouter", isFree: true },
+  { id: "openai/gpt-oss-20b:free", name: "OpenAI GPT-OSS 20B (Free)", provider: "openrouter", isFree: true },
+  { id: "poolside/laguna-m.1:free", name: "Poolside Laguna M.1 (Free)", provider: "openrouter", isFree: true },
+  { id: "cohere/north-mini-code:free", name: "Cohere North Mini Code (Free)", provider: "openrouter", isFree: true },
 
   // ── OpenRouter — Paid ───────────────────────────────────────────────────
-  { id: "google/gemini-2.0-flash-001", name: "Gemini 2.0 Flash (Paid)", provider: "openrouter", isFree: false },
+  { id: "google/gemini-2.5-flash", name: "Gemini 2.5 Flash (Paid)", provider: "openrouter", isFree: false },
   { id: "openai/gpt-4o", name: "GPT-4o (Paid)", provider: "openrouter", isFree: false },
-  { id: "anthropic/claude-3.5-sonnet", name: "Claude 3.5 Sonnet (Paid)", provider: "openrouter", isFree: false },
-  { id: "deepseek/deepseek-chat", name: "DeepSeek V3 (Paid)", provider: "openrouter", isFree: false },
+  { id: "anthropic/claude-sonnet-4-5", name: "Claude Sonnet 4.5 (Paid)", provider: "openrouter", isFree: false },
+  { id: "deepseek/deepseek-chat-v3-0324", name: "DeepSeek V3 (Paid)", provider: "openrouter", isFree: false },
+  { id: "meta-llama/llama-4-maverick", name: "Llama 4 Maverick (Paid)", provider: "openrouter", isFree: false },
 ];
 
 export default function App() {
