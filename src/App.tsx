@@ -116,7 +116,9 @@ export default function App() {
     setSelectedWord(null);
 
     try {
-      const response = await fetch("/api/analyze-sentiment", {
+      // @ts-ignore
+      const appUrl = (process.env.APP_URL || "").replace(/\/$/, "");
+      const response = await fetch(`${appUrl}/api/analyze-sentiment`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

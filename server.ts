@@ -9,7 +9,25 @@ dotenv.config(); // loads .env
 dotenv.config({ path: ".env.local", override: true }); // loads .env.local (overrides if same key exists)
 
 const app = express();
-const PORT = 3000;
+
+// Set PORT from environment or parse from APP_URL
+let PORT = 3000;
+if (process.env.PORT) {
+  PORT = parseInt(process.env.PORT, 10);
+} else if (process.env.APP_URL) {
+  try {
+    const parsedUrl = new URL(process.env.APP_URL);
+    if (parsedUrl.port) {
+      PORT = parseInt(parsedUrl.port, 10);
+    } else if (parsedUrl.protocol === "https:") {
+      PORT = 443;
+    } else if (parsedUrl.protocol === "http:") {
+      PORT = 80;
+    }
+  } catch (e) {
+    // Ignore invalid URL
+  }
+}
 
 // ── CORS middleware ─────────────────────────────────────────────────────────
 // Ensures every response (including errors) includes the correct CORS headers
@@ -368,7 +386,7 @@ async function initServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server listening at http://localhost:${PORT}`);
+    console.log(`Server listening at ${process.env.APP_URL || `http://localhost:${PORT}`}`);
   });
 }
 

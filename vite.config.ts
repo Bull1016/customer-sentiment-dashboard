@@ -2,6 +2,13 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import {defineConfig} from 'vite';
+import dotenv from 'dotenv';
+
+// Load environment variables matching server.ts behavior
+dotenv.config();
+dotenv.config({ path: ".env.local", override: true });
+
+const appUrl = process.env.APP_URL || 'http://localhost:3000';
 
 export default defineConfig(() => {
   return {
@@ -11,10 +18,13 @@ export default defineConfig(() => {
         '@': path.resolve(__dirname, '.'),
       },
     },
+    define: {
+      'process.env.APP_URL': JSON.stringify(appUrl),
+    },
     server: {
       proxy: {
         '/api': {
-          target: 'http://localhost:3000',
+          target: appUrl,
           changeOrigin: true,
         },
       },
