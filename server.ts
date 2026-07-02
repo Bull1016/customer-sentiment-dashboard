@@ -48,6 +48,10 @@ function getGeminiClient(): GoogleGenAI {
         headers: {
           "User-Agent": "aistudio-build",
         },
+        timeout: 15000, // 15 seconds timeout
+        retryOptions: {
+          attempts: 1, // Disable SDK internal retries
+        }
       },
     });
   }
@@ -65,6 +69,8 @@ function getOpenRouterClient(): OpenAI {
     openRouterClient = new OpenAI({
       baseURL: "https://openrouter.ai/api/v1",
       apiKey: apiKey,
+      maxRetries: 0, // Disable SDK internal retries
+      timeout: 15000, // 15 seconds timeout
       defaultHeaders: {
         "HTTP-Referer": process.env.APP_URL || "http://localhost:3000",
         "X-Title": "Sentiment Pulse",
@@ -117,8 +123,8 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  */
 async function callWithRetry<T>(
   fn: () => Promise<T>,
-  maxAttempts = 3,
-  delayMs = 2000
+  maxAttempts = 2,
+  delayMs = 1000
 ): Promise<T> {
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
