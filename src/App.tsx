@@ -38,7 +38,6 @@ interface AIModel {
 const AI_MODELS: AIModel[] = [
   // ── Gemini Direct (via GEMINI_API_KEY) ──────────────────────────────────
   { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash", provider: "gemini", isFree: true },
-  { id: "gemini-2.5-flash-preview-05-20", name: "Gemini 2.5 Flash Preview", provider: "gemini", isFree: true },
 
   // ── OpenRouter — Truly Free ($0 input / $0 output) ──────────────────────
   { id: "meta-llama/llama-3.3-70b-instruct:free", name: "Llama 3.3 70B (Free)", provider: "openrouter", isFree: true },
@@ -469,7 +468,7 @@ export default function App() {
                         ) : (
                           <>
                             <Sparkles className="h-4 w-4" />
-                            <span>Generate {selectedModel.name} Report</span>
+                            <span>Generate {selectedModel.name} Record</span>
                             <ArrowRight className="h-3.5 w-3.5" />
                           </>
                         )}
@@ -511,7 +510,7 @@ export default function App() {
               >
                 <span className="flex items-center gap-1.5">
                   <Sparkles className="h-3.5 w-3.5 text-indigo-400" />
-                  Showing real-time AI report. Click to reopen inputs and switch models.
+                  Showing real-time AI record. Click to reopen inputs and switch models.
                 </span>
                 <span className="text-indigo-400 hover:underline hover:text-indigo-300 font-semibold flex items-center gap-1">
                   Change Input Dataset or Model <ArrowRight className="h-3 w-3" />
@@ -636,7 +635,7 @@ export default function App() {
                 </div>
 
                 <div className="mt-6 pt-4 border-t border-slate-100 flex items-center gap-2 text-[10px] text-slate-400 leading-relaxed font-sans">
-                  <span>Generative report compiled using {selectedModel.name}.</span>
+                  <span>Generative record compiled using {selectedModel.name}.</span>
                 </div>
               </div>
 

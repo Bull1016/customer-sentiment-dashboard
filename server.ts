@@ -128,8 +128,9 @@ async function callWithRetry<T>(
 }
 // ───────────────────────────────────────────────────────────────────────────
 
-// REST route for sentiment analysis
-app.post("/api/analyze-sentiment", async (req, res) => {
+function registerApiRoutes(app: express.Express) {
+  // REST route for sentiment analysis
+  app.post("/api/analyze-sentiment", async (req, res) => {
   try {
     const { reviewsText, provider = "gemini", model } = req.body;
 
@@ -285,6 +286,7 @@ Perform the complete sentiment analysis and output the result in the requested J
     });
   }
 });
+}
 
 // Configure Vite middleware or production static routing
 async function initServer() {
@@ -293,9 +295,17 @@ async function initServer() {
       server: { middlewareMode: true },
       appType: "spa",
     });
+
+    // API routes MUST be registered before Vite middleware in development
+    // to avoid Vite intercepting them and returning 404.
+    registerApiRoutes(app);
+
     app.use(vite.middlewares);
     console.log("Vite development middleware mounted.");
   } else {
+    // API routes for production
+    registerApiRoutes(app);
+
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
